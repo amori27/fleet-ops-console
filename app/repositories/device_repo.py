@@ -66,6 +66,7 @@ async def list_devices(
 
         query = query.where(
             or_(
+                Device.status > cursor_status,
                 (Device.status == cursor_status)
                 & (Device.last_seen < cursor_last_seen),
                 (Device.status == cursor_status)

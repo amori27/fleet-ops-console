@@ -9,9 +9,6 @@ from app.models.action import ActionStatus
 class ActionCreate(BaseModel):
     action_type: str
     payload: dict = Field(default_factory=dict)
-    idempotency_key: str = Field(
-        ..., alias="Idempotency-Key", description="Client-supplied idempotency key"
-    )
 
 
 class ActionRead(BaseModel):

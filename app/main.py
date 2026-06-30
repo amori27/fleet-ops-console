@@ -2,9 +2,6 @@ import asyncio
 import contextlib
 
 import structlog
-from arq import create_pool
-from arq.connections import RedisSettings
-from arq.worker import Worker
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,7 +11,6 @@ from app.api.ws import ws_router
 from app.config import get_settings
 from app.db.engine import async_engine
 from app.services.pubsub import PubSub
-from app.telemetry.dispatcher import dispatch_action
 
 logger = structlog.get_logger()
 
@@ -25,30 +21,46 @@ async def lifespan(app: FastAPI):
 
     app.state.pubsub = PubSub()
 
-    redis_pool = await create_pool(
-        RedisSettings.from_dsn(settings.redis_url)
-    )
-    app.state.redis_pool = redis_pool
+    worker_task: asyncio.Task | None = None
 
-    worker = Worker(
-        functions=[dispatch_action],
-        redis_settings=RedisSettings.from_dsn(settings.redis_url),
-        ctx={"pubsub": app.state.pubsub},
-        burst=False,
-        poll_delay=0.5,
-    )
-    worker_task = asyncio.create_task(worker.async_run())
+    if settings.redis_url:
+        try:
+            from arq import create_pool
+            from arq.connections import RedisSettings
+            from arq.worker import Worker
+            from app.telemetry.dispatcher import dispatch_action
 
-    logger.info("fleet_api_started", redis_url=settings.redis_url)
+            redis_pool = await create_pool(
+                RedisSettings.from_dsn(settings.redis_url)
+            )
+            app.state.redis_pool = redis_pool
+
+            worker = Worker(
+                functions=[dispatch_action],
+                redis_settings=RedisSettings.from_dsn(settings.redis_url),
+                ctx={"pubsub": app.state.pubsub},
+                burst=False,
+                poll_delay=0.5,
+            )
+            worker_task = asyncio.create_task(worker.async_run())
+            logger.info("ARQ worker started", redis_url=settings.redis_url)
+        except Exception as exc:
+            logger.warning("Redis unavailable, running without ARQ worker", error=str(exc))
+
+    logger.info("fleet_api_started")
 
     yield
 
-    worker_task.cancel()
-    try:
-        await worker_task
-    except asyncio.CancelledError:
-        pass
-    await redis_pool.close()
+    if worker_task is not None:
+        worker_task.cancel()
+        try:
+            await worker_task
+        except asyncio.CancelledError:
+            pass
+
+    if hasattr(app.state, "redis_pool"):
+        await app.state.redis_pool.close()
+
     await async_engine.dispose()
     logger.info("fleet_api_shutdown")
 

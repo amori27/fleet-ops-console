@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -75,6 +75,7 @@ async def ingest_telemetry(
 async def create_action(
     device_id: uuid.UUID,
     action_data: ActionCreate,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
     session: AsyncSession = Depends(get_db),
     commander=Depends(require_role(Role.COMMANDER)),
 ):
@@ -83,7 +84,7 @@ async def create_action(
         device_id=device_id,
         action_type=action_data.action_type,
         payload=action_data.payload,
-        idempotency_key=action_data.idempotency_key,
+        idempotency_key=idempotency_key,
         created_by=commander.username,
     )
 

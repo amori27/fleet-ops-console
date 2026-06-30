@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     CheckConstraint,
+    DateTime,
     ForeignKey,
     UniqueConstraint,
     func,
@@ -29,8 +30,10 @@ class TelemetryEvent(Base):
     device_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("devices.id"), index=True
     )
-    recorded_at: Mapped[datetime]
-    received_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     battery_level: Mapped[float | None]
     lat: Mapped[float | None]
     lng: Mapped[float | None]
