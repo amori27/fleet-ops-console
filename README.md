@@ -1,8 +1,3 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
-[![CI](https://github.com/amori27/fleet-ops-console/actions/workflows/ci.yml/badge.svg)](https://github.com/amori27/fleet-ops-console/actions/workflows/ci.yml)
-[![code style](https://img.shields.io/badge/code_style-pyright-7951B2)](https://github.com/microsoft/pyright)
-
 # Fleet Ops Console API
 
 Mission-critical backend for satellite and vehicle fleet operations. Built with FastAPI, SQLAlchemy 2.0 async, PostgreSQL, and ARQ.
