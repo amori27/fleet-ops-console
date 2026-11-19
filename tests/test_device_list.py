@@ -49,7 +49,7 @@ class TestKeysetPagination:
     async def test_cursor_is_opaque_json(
         self, async_session: AsyncSession, device_factory
     ) -> None:
-        await device_factory.create(async_session)
+        await device_factory.create_batch(async_session, 2)
 
         items, next_cursor = await list_devices(async_session, limit=1)
         assert next_cursor is not None

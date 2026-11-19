@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,11 +30,16 @@ async def upsert_telemetry(
             "received_at": func.now(),
         },
     )
-    stmt = stmt.returning(func.xmin(TelemetryEvent.id).label("xmin"))
+    # ``xmax = 0`` marks rows this statement inserted; updated rows carry a
+    # non-zero xmax. The caller owns the transaction (get_db / test fixture)
+    # so a later failed write can still roll the whole batch back.
+    stmt = stmt.returning(
+        TelemetryEvent.id,
+        literal_column("xmax = 0").label("was_insert"),
+    )
     result = await session.execute(stmt)
-    await session.commit()
 
-    return sum(1 for _ in result)
+    return sum(1 for row in result if row[1])
 
 
 async def get_latest_telemetry(

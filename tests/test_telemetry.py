@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,7 +77,7 @@ class TestTelemetryUpsert:
         records = [
             {
                 "device_id": device.id,
-                "recorded_at": now,
+                "recorded_at": now + timedelta(seconds=i),
                 "battery_level": float(i * 10),
             }
             for i in range(10)

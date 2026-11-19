@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import uuid
 from collections.abc import AsyncGenerator
@@ -7,19 +6,13 @@ from datetime import datetime, timezone
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.base import Base
 from app.models.action import Action, ActionStatus
 from app.models.device import Device
 from app.models.telemetry import TelemetryEvent
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -35,6 +28,17 @@ async def async_engine():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_tables(async_engine) -> AsyncGenerator[None, None]:
+    # Several repositories commit inside their own methods, so the per-test
+    # rollback below cannot keep data isolated. Start every test from empty
+    # tables to make order-dependent assertions (e.g. an empty list) reliable.
+    tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
+    async with async_engine.begin() as conn:
+        await conn.execute(text(f"TRUNCATE TABLE {tables} RESTART IDENTITY CASCADE"))
+    yield
 
 
 @pytest_asyncio.fixture
@@ -54,6 +58,7 @@ async def device_factory(async_session: AsyncSession):
 
         async def create(
             self,
+            session: AsyncSession | None = None,
             status: str = "active",
             device_type: str = "satellite",
             region: str = "LEO",
@@ -71,13 +76,15 @@ async def device_factory(async_session: AsyncSession):
                 api_key_hash=hashlib.sha256(api_key.encode()).hexdigest(),
                 last_seen=kwargs.get("last_seen"),
             )
-            async_session.add(device)
-            await async_session.flush()
+            session = session or async_session
+            session.add(device)
+            await session.flush()
             return device
 
         async def create_batch(
             self,
-            count: int,
+            session: AsyncSession | None = None,
+            count: int = 0,
             status: str = "active",
             device_type: str = "satellite",
             region: str = "LEO",
@@ -94,10 +101,11 @@ async def device_factory(async_session: AsyncSession):
                     api_key_hash=hashlib.sha256(f"key-{i}".encode()).hexdigest(),
                     last_seen=datetime.now(timezone.utc),
                 )
-                async_session.add(device)
+                session = session or async_session
+                session.add(device)
                 DeviceFactory._counter += 1
                 devices.append(device)
-            await async_session.flush()
+            await (session or async_session).flush()
             return devices
 
     return DeviceFactory()
